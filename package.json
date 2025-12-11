@@ -1,0 +1,12 @@
+{
+  "name": "unicorns-api-lab",
+  "version": "1.0.0",
+  "description": "API for updating unicorn locations",
+  "main": "api/update-geo.js",
+  "scripts": {
+    "test": "echo \"No tests\""
+  },
+  "keywords": ["mongodb", "unicorns", "api"],
+  "author": "Your Name",
+  "license": "MIT"
+}
