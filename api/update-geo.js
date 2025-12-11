@@ -1,18 +1,48 @@
-// api/update-geo.js - САМЫЙ ПРОСТОЙ РАБОЧИЙ КОД
+const axios = require('axios');
+
 module.exports = async function handler(req, res) {
-  console.log('✅ API called:', req.method, req.url);
+  console.log('🦄 Unicorns API called');
   
-  // Простой JSON ответ
-  return res.status(200).json({
-    success: true,
-    project: 'Unicorns Geo API',
-    message: 'API is working! 🦄',
-    endpoint: '/api/update-geo',
-    method: req.method,
-    timestamp: new Date().toISOString(),
-    features: [
-      'GET - Test endpoint',
-      'POST - Update unicorn location'
-    ]
-  });
+  if (req.method === 'GET') {
+    return res.json({
+      project: 'Unicorns Real Location Service',
+      status: 'online',
+      endpoints: {
+        updateGeo: 'POST /api/update-geo - Update unicorn with real country/town',
+        test: 'GET /api/update-geo - This info'
+      },
+      env_check: {
+        mongodb_key: process.env.MONGODB_API_KEY ? '✅ Set' : '❌ Missing',
+        mongodb_app: process.env.MONGODB_APP_ID ? '✅ Set' : '❌ Missing'
+      }
+    });
+  }
+  
+  if (req.method === 'POST') {
+    try {
+      // Проверяем переменные окружения
+      if (!process.env.MONGODB_API_KEY || !process.env.MONGODB_APP_ID) {
+        return res.status(500).json({
+          error: 'Configuration missing',
+          message: 'Add MONGODB_API_KEY and MONGODB_APP_ID in Vercel Environment Variables',
+          action: 'Go to Vercel Dashboard → Settings → Environment Variables'
+        });
+      }
+      
+      return res.json({
+        success: true,
+        message: 'Ready to update unicorns!',
+        next: 'Will connect to MongoDB and OpenStreetMap',
+        timestamp: new Date().toISOString()
+      });
+      
+    } catch (error) {
+      return res.status(500).json({
+        error: 'Server error',
+        message: error.message
+      });
+    }
+  }
+  
+  res.status(405).json({ error: 'Method not allowed' });
 };
