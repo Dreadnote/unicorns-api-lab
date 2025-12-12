@@ -66,7 +66,7 @@ module.exports = async function handler(req, res) {
       // 4. Получаем адрес из OpenStreetMap
       console.log('🗺️  Getting address...');
       const response = await axios.get('https://nominatim.openstreetmap.org/reverse', {
-        params: { lat, lon, format: 'json', zoom: 10 },
+        params: { lat, lon, format: 'json', zoom: 10, 'accept-language': 'en'},
         headers: { 'User-Agent': 'UnicornsApp' }
       });
       
