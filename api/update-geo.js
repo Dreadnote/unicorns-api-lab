@@ -1,48 +1,119 @@
+// api/update-geo.js - ФИНАЛЬНЫЙ КОД БЕЗ APP SERVICES
+const { MongoClient } = require('mongodb');
 const axios = require('axios');
 
 module.exports = async function handler(req, res) {
-  console.log('🦄 Unicorns API called');
   
+  // Разрешаем запросы откуда угодно
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST');
+  
+  // GET запрос - информация
   if (req.method === 'GET') {
     return res.json({
-      project: 'Unicorns Real Location Service',
+      service: 'Unicorns Location Service',
       status: 'online',
-      endpoints: {
-        updateGeo: 'POST /api/update-geo - Update unicorn with real country/town',
-        test: 'GET /api/update-geo - This info'
-      },
-      env_check: {
-        mongodb_key: process.env.MONGODB_API_KEY ? '✅ Set' : '❌ Missing',
-        mongodb_app: process.env.MONGODB_APP_ID ? '✅ Set' : '❌ Missing'
-      }
+      method: 'MongoDB Connection String',
+      endpoint: 'POST /api/update-geo',
+      action: 'Adds real_country and real_town fields',
+      connection: process.env.MONGODB_URI ? '✅ Configured' : '❌ Add MONGODB_URI to Vercel'
     });
   }
   
+  // POST запрос - обновление единорога
   if (req.method === 'POST') {
+    console.log('=== UNICORN UPDATE START ===');
+    
+    let client;
     try {
-      // Проверяем переменные окружения
-      if (!process.env.MONGODB_API_KEY || !process.env.MONGODB_APP_ID) {
+      // 1. Получаем строку подключения
+      const connectionString = process.env.MONGODB_URI;
+      
+      if (!connectionString) {
+        console.log('❌ No connection string');
         return res.status(500).json({
-          error: 'Configuration missing',
-          message: 'Add MONGODB_API_KEY and MONGODB_APP_ID in Vercel Environment Variables',
-          action: 'Go to Vercel Dashboard → Settings → Environment Variables'
+          error: 'No database connection',
+          fix: 'Add MONGODB_URI to Vercel Environment Variables'
         });
       }
       
+      console.log('🔗 Connecting to MongoDB...');
+      client = new MongoClient(connectionString);
+      await client.connect();
+      console.log('✅ Connected!');
+      
+      // 2. Работаем с коллекцией unicorns
+      const db = client.db('Learn');
+      const unicorns = db.collection('unicorns');
+      
+      // 3. Ищем единорога без real_country
+      const unicorn = await unicorns.findOne({
+        "location.coordinates": { $exists: true },
+        "real_country": { $exists: false }
+      });
+      
+      if (!unicorn) {
+        const count = await unicorns.countDocuments({ real_country: { $exists: true } });
+        return res.json({
+          message: `✅ All done! ${count} unicorns updated.`,
+          status: 'complete'
+        });
+      }
+      
+      console.log(`🎯 Found: ${unicorn.name || 'Unnamed unicorn'}`);
+      const [lon, lat] = unicorn.location.coordinates;
+      
+      // 4. Получаем адрес из OpenStreetMap
+      console.log('🗺️  Getting address...');
+      const response = await axios.get('https://nominatim.openstreetmap.org/reverse', {
+        params: { lat, lon, format: 'json', zoom: 10 },
+        headers: { 'User-Agent': 'UnicornsApp' }
+      });
+      
+      const address = response.data.address;
+      const country = address.country || address.state || 'Unknown';
+      const town = address.city || address.town || address.village || 'Unknown';
+      const fullAddress = response.data.display_name;
+      
+      // 5. Сохраняем в MongoDB
+      console.log('💾 Saving...');
+      const result = await unicorns.updateOne(
+        { _id: unicorn._id },
+        {
+          $set: {
+            real_country: country,
+            real_town: town,
+            real_address: fullAddress,
+            updated_at: new Date()
+          }
+        }
+      );
+      
+      console.log('✅ Saved successfully');
+      
       return res.json({
         success: true,
-        message: 'Ready to update unicorns!',
-        next: 'Will connect to MongoDB and OpenStreetMap',
-        timestamp: new Date().toISOString()
+        unicorn: unicorn.name,
+        location: { country, town, coordinates: [lon, lat] },
+        address: fullAddress,
+        updated: result.modifiedCount > 0
       });
       
     } catch (error) {
+      console.error('💥 Error:', error.message);
       return res.status(500).json({
-        error: 'Server error',
+        error: 'Something went wrong',
         message: error.message
       });
+    } finally {
+      if (client) {
+        await client.close();
+        console.log('🔌 Connection closed');
+      }
+      console.log('=== UPDATE FINISHED ===');
     }
   }
   
-  res.status(405).json({ error: 'Method not allowed' });
+  // Если метод не GET или POST
+  res.status(405).json({ error: 'Use GET or POST' });
 };
